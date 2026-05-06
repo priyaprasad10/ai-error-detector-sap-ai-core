@@ -4,6 +4,8 @@ streamlit
 requests
 pillow
 sentence-transformers
+torch
+torchvision
 numpy
 psycopg2-binary
 bcrypt
