@@ -1,0 +1,13 @@
+generative-ai-hub-sdk
+langchain-core
+langchain
+python-dotenv
+streamlit
+requests
+pillow
+sentence-transformers
+numpy
+psycopg2-binary
+bcrypt
+pandas
+plotly
