@@ -1,29 +1,92 @@
 # backend.py — AI Error Detective Core Engine
 import os
 import re
+import time
 import base64
 import numpy as np
+import requests as _http
 from pathlib import Path
 from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
-for _key in ("AICORE_AUTH_URL", "AICORE_CLIENT_ID", "AICORE_CLIENT_SECRET",
-             "AICORE_BASE_URL", "AICORE_RESOURCE_GROUP"):
-    _val = os.getenv(_key, "")
-    if _val:
-        os.environ[_key] = _val
+_AICORE_BASE = os.getenv("AICORE_BASE_URL", "").rstrip("/")
+_AICORE_RG   = os.getenv("AICORE_RESOURCE_GROUP", "default")
+_TOKEN_CACHE: dict = {}
+_DEP_CACHE:   dict = {}
 
-from gen_ai_hub.proxy.native.openai import chat
+
+def _get_token() -> str:
+    now = time.time()
+    if _TOKEN_CACHE.get("token") and now < _TOKEN_CACHE.get("expires_at", 0) - 60:
+        return _TOKEN_CACHE["token"]
+    r = _http.post(
+        os.getenv("AICORE_AUTH_URL", "").rstrip("/") + "/oauth/token",
+        data={"grant_type": "client_credentials"},
+        auth=(os.getenv("AICORE_CLIENT_ID", ""), os.getenv("AICORE_CLIENT_SECRET", "")),
+        timeout=30,
+    )
+    r.raise_for_status()
+    data = r.json()
+    _TOKEN_CACHE["token"]      = data["access_token"]
+    _TOKEN_CACHE["expires_at"] = now + float(data.get("expires_in", 3600))
+    return _TOKEN_CACHE["token"]
+
+
+def _get_dep_url(model: str = "gpt-5") -> str:
+    if model in _DEP_CACHE:
+        return _DEP_CACHE[model]
+    token = _get_token()
+    r = _http.get(
+        f"{_AICORE_BASE}/v2/lm/deployments",
+        headers={"Authorization": f"Bearer {token}", "AI-Resource-Group": _AICORE_RG},
+        timeout=30,
+    )
+    r.raise_for_status()
+    for dep in r.json().get("resources", []):
+        if dep.get("status") != "RUNNING":
+            continue
+        model_name = (
+            dep.get("details", {})
+               .get("resources", {})
+               .get("backend_details", {})
+               .get("model", {})
+               .get("name", "")
+            or dep.get("configurationName", "")
+        )
+        if model.lower() in model_name.lower():
+            url = f"{_AICORE_BASE}/v2/inference/deployments/{dep['id']}"
+            _DEP_CACHE[model] = url
+            return url
+    raise RuntimeError(
+        f"No running '{model}' deployment found in AI Core. "
+        "Check your AI Core cockpit and ensure the deployment is in RUNNING state."
+    )
+
+
+def _aicore_chat(messages: list, max_completion_tokens: int = None) -> str:
+    token   = _get_token()
+    dep_url = _get_dep_url("gpt-5")
+    body: dict = {"model": "gpt-5", "messages": messages}
+    if max_completion_tokens:
+        body["max_completion_tokens"] = max_completion_tokens
+    r = _http.post(
+        f"{dep_url}/chat/completions",
+        json=body,
+        headers={
+            "Authorization":  f"Bearer {token}",
+            "AI-Resource-Group": _AICORE_RG,
+            "Content-Type":   "application/json",
+        },
+        timeout=120,
+    )
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"].strip()
 
 
 def _ai_core_invoke(prompt_str: str) -> str:
-    response = chat.completions.create(
-        model="gpt-5",
-        messages=[{"role": "user", "content": prompt_str}],
-    )
-    return response.choices[0].message.content.strip()
+    return _aicore_chat([{"role": "user", "content": prompt_str}])
 
 
 # ─────────────────────────────────────────────
@@ -462,8 +525,7 @@ def extract_text_from_image(image_file) -> str:
         fmt  = (img.format or "PNG").lower()
         mime = f"image/{fmt}"
 
-        response = chat.completions.create(
-            model="gpt-5",
+        response = _aicore_chat(
             messages=[{
                 "role": "user",
                 "content": [
@@ -485,8 +547,7 @@ def extract_text_from_image(image_file) -> str:
             max_completion_tokens=1000,
         )
 
-        extracted = response.choices[0].message.content.strip()
-        return extracted if extracted else "No text found in image."
+        extracted = response if response else "No text found in image."
 
     except Exception as e:
         return (
