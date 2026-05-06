@@ -1,4 +1,3 @@
-
 # app.py — AI Error Detective Streamlit UI
 from database import (save_history, get_history, init_db, mark_resolved,
                        create_team, join_team, leave_team,
@@ -472,7 +471,7 @@ with tab1:
                         st.session_state.screenshot_extracted = extracted
                         st.success("✅ Text extracted — included in analysis automatically.")
                     else:
-                        st.error(f"⚠️ Image extraction failed: {extracted}")
+                        st.error("⚠️ Could not extract text from image. Please paste error manually above.")
                         st.session_state.screenshot_extracted = None
         else:
             st.session_state.screenshot_extracted = None
