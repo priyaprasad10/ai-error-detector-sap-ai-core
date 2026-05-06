@@ -13,13 +13,15 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
 _AICORE_BASE = os.getenv("AICORE_BASE_URL", "").rstrip("/")
 _AICORE_RG   = os.getenv("AICORE_RESOURCE_GROUP", "default")
+
+# Module-level cache — survives Streamlit reruns within the same worker process
 _TOKEN_CACHE: dict = {}
 _DEP_CACHE:   dict = {}
 
 
 def _get_token() -> str:
     now = time.time()
-    if _TOKEN_CACHE.get("token") and now < _TOKEN_CACHE.get("expires_at", 0) - 60:
+    if _TOKEN_CACHE.get("token") and now < _TOKEN_CACHE.get("expires_at", 0) - 300:
         return _TOKEN_CACHE["token"]
     r = _http.post(
         os.getenv("AICORE_AUTH_URL", "").rstrip("/") + "/oauth/token",
@@ -83,6 +85,14 @@ def _aicore_chat(messages: list, max_completion_tokens: int = None) -> str:
     )
     r.raise_for_status()
     return r.json()["choices"][0]["message"]["content"].strip()
+
+
+def warm_up_aicore():
+    """Pre-fetch OAuth token + deployment URL at startup to avoid cold-start lag."""
+    try:
+        _get_dep_url("gpt-5")
+    except Exception:
+        pass
 
 
 def _ai_core_invoke(prompt_str: str, system_prompt: str = None) -> str:
