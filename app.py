@@ -21,6 +21,7 @@ from backend import (
     format_download_report,
     get_embedding,
     cosine_similarity,
+    warm_up_aicore,
 )
 
 init_db()
@@ -39,6 +40,12 @@ def load_embed_model():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 embed_model = load_embed_model()
+
+@st.cache_resource(show_spinner=False)
+def _init_aicore():
+    warm_up_aicore()
+
+_init_aicore()
 
 st.markdown("""
 <style>
