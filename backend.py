@@ -548,6 +548,7 @@ def extract_text_from_image(image_file) -> str:
         )
 
         extracted = response if response else "No text found in image."
+        return extracted
 
     except Exception as e:
         return (
