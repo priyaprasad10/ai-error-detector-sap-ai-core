@@ -1,6 +1,4 @@
-generative-ai-hub-sdk
 langchain-core
-langchain
 python-dotenv
 streamlit
 requests
