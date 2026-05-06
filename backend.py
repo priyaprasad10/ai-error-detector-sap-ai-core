@@ -14,7 +14,7 @@ load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 _AICORE_BASE          = os.getenv("AICORE_BASE_URL", "").rstrip("/")
 _AICORE_RG            = os.getenv("AICORE_RESOURCE_GROUP", "default")
 _AICORE_DEPLOYMENT_ID = os.getenv("AICORE_DEPLOYMENT_ID", "")
-_AICORE_MODEL         = "anthropic--claude-4.6-sonnet"
+_AICORE_MODEL         = "gpt-5"
 
 # Module-level cache — survives Streamlit reruns within the same worker process
 _TOKEN_CACHE: dict = {}
@@ -74,12 +74,12 @@ def _get_dep_url(model: str = _AICORE_MODEL) -> str:
     )
 
 
-def _aicore_chat(messages: list, max_tokens: int = None) -> str:
+def _aicore_chat(messages: list, max_completion_tokens: int = None) -> str:
     token   = _get_token()
     dep_url = _get_dep_url(_AICORE_MODEL)
     body: dict = {"model": _AICORE_MODEL, "messages": messages}
-    if max_tokens:
-        body["max_tokens"] = max_tokens
+    if max_completion_tokens:
+        body["max_completion_tokens"] = max_completion_tokens
     r = _http.post(
         f"{dep_url}/v1/chat/completions",
         json=body,
@@ -546,18 +546,14 @@ def extract_text_from_image(image_file) -> str:
         fmt  = (img.format or "PNG").lower()
         mime = f"image/{fmt}"
 
-        # Try Anthropic-native image format (Claude via SAP AI Core)
+        # Anthropic-native image format with OpenAI-compatible fallback
         response = _aicore_chat(
             messages=[{
                 "role": "user",
                 "content": [
                     {
-                        "type": "image",
-                        "source": {
-                            "type":       "base64",
-                            "media_type": mime,
-                            "data":       img_b64,
-                        }
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{img_b64}"}
                     },
                     {
                         "type": "text",
@@ -570,7 +566,7 @@ def extract_text_from_image(image_file) -> str:
                     }
                 ]
             }],
-            max_tokens=1000,
+            max_completion_tokens=1000,
         )
 
         return response if response else "No text found in image."
