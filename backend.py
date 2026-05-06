@@ -72,7 +72,7 @@ def _aicore_chat(messages: list, max_completion_tokens: int = None) -> str:
     if max_completion_tokens:
         body["max_completion_tokens"] = max_completion_tokens
     r = _http.post(
-        f"{dep_url}/chat/completions",
+        f"{dep_url}/v1/chat/completions",
         json=body,
         headers={
             "Authorization":  f"Bearer {token}",
