@@ -11,8 +11,10 @@ from langchain_core.prompts import PromptTemplate
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
-_AICORE_BASE = os.getenv("AICORE_BASE_URL", "").rstrip("/")
-_AICORE_RG   = os.getenv("AICORE_RESOURCE_GROUP", "default")
+_AICORE_BASE          = os.getenv("AICORE_BASE_URL", "").rstrip("/")
+_AICORE_RG            = os.getenv("AICORE_RESOURCE_GROUP", "default")
+_AICORE_DEPLOYMENT_ID = os.getenv("AICORE_DEPLOYMENT_ID", "")
+_AICORE_MODEL         = "anthropic--claude-4.6-sonnet"
 
 # Module-level cache — survives Streamlit reruns within the same worker process
 _TOKEN_CACHE: dict = {}
@@ -36,9 +38,14 @@ def _get_token() -> str:
     return _TOKEN_CACHE["token"]
 
 
-def _get_dep_url(model: str = "gpt-5") -> str:
+def _get_dep_url(model: str = _AICORE_MODEL) -> str:
     if model in _DEP_CACHE:
         return _DEP_CACHE[model]
+    # If deployment ID is set directly, skip the API lookup entirely
+    if _AICORE_DEPLOYMENT_ID:
+        url = f"{_AICORE_BASE}/v2/inference/deployments/{_AICORE_DEPLOYMENT_ID}"
+        _DEP_CACHE[model] = url
+        return url
     token = _get_token()
     r = _http.get(
         f"{_AICORE_BASE}/v2/lm/deployments",
@@ -67,19 +74,19 @@ def _get_dep_url(model: str = "gpt-5") -> str:
     )
 
 
-def _aicore_chat(messages: list, max_completion_tokens: int = None) -> str:
+def _aicore_chat(messages: list, max_tokens: int = None) -> str:
     token   = _get_token()
-    dep_url = _get_dep_url("gpt-5")
-    body: dict = {"model": "gpt-5", "messages": messages}
-    if max_completion_tokens:
-        body["max_completion_tokens"] = max_completion_tokens
+    dep_url = _get_dep_url(_AICORE_MODEL)
+    body: dict = {"model": _AICORE_MODEL, "messages": messages}
+    if max_tokens:
+        body["max_tokens"] = max_tokens
     r = _http.post(
         f"{dep_url}/v1/chat/completions",
         json=body,
         headers={
-            "Authorization":  f"Bearer {token}",
+            "Authorization":     f"Bearer {token}",
             "AI-Resource-Group": _AICORE_RG,
-            "Content-Type":   "application/json",
+            "Content-Type":      "application/json",
         },
         timeout=120,
     )
@@ -558,7 +565,7 @@ def extract_text_from_image(image_file) -> str:
                     }
                 ]
             }],
-            max_completion_tokens=1000,
+            max_tokens=1000,
         )
 
         extracted = response if response else "No text found in image."
