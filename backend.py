@@ -85,8 +85,12 @@ def _aicore_chat(messages: list, max_completion_tokens: int = None) -> str:
     return r.json()["choices"][0]["message"]["content"].strip()
 
 
-def _ai_core_invoke(prompt_str: str) -> str:
-    return _aicore_chat([{"role": "user", "content": prompt_str}])
+def _ai_core_invoke(prompt_str: str, system_prompt: str = None) -> str:
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt_str})
+    return _aicore_chat(messages)
 
 
 # ─────────────────────────────────────────────
@@ -451,7 +455,7 @@ def analyze_error(error_text: str, error_type: str) -> dict:
         error_text=error_text[:5000],
         error_type=error_type,
         platform_context=platform_context,
-    ))
+    ), system_prompt=platform_context)
     severity = extract_severity(response)
 
     return {
@@ -481,7 +485,7 @@ def get_quick_fix(error_text: str, error_type: str) -> str:
         error_text=error_text[:2000],
         error_type=error_type,
         platform_context=platform_context,
-    ))
+    ), system_prompt=platform_context)
 
 
 def chat_about_error(
@@ -508,7 +512,7 @@ def chat_about_error(
         question=question,
         error_type=error_type,
         platform_context=platform_context,
-    ))
+    ), system_prompt=platform_context)
 
 
 def extract_text_from_image(image_file) -> str:
