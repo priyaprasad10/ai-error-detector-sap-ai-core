@@ -533,7 +533,7 @@ def chat_about_error(
 
 
 def extract_text_from_image(image_file) -> str:
-    """Extract text from SAP error screenshot using SAP AI Core GPT-5 vision."""
+    """Extract text from SAP error screenshot using SAP AI Core Claude vision."""
     try:
         from PIL import Image
 
@@ -546,13 +546,18 @@ def extract_text_from_image(image_file) -> str:
         fmt  = (img.format or "PNG").lower()
         mime = f"image/{fmt}"
 
+        # Try Anthropic-native image format (Claude via SAP AI Core)
         response = _aicore_chat(
             messages=[{
                 "role": "user",
                 "content": [
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{mime};base64,{img_b64}"}
+                        "type": "image",
+                        "source": {
+                            "type":       "base64",
+                            "media_type": mime,
+                            "data":       img_b64,
+                        }
                     },
                     {
                         "type": "text",
@@ -568,14 +573,14 @@ def extract_text_from_image(image_file) -> str:
             max_tokens=1000,
         )
 
-        extracted = response if response else "No text found in image."
-        return extracted
+        return response if response else "No text found in image."
 
     except Exception as e:
-        return (
-            f"Could not read image: {str(e)}\n"
-            "Please copy-paste the error text in the Analyze Error tab."
-        )
+        err = str(e)
+        # If vision is unsupported, return a clean message instead of a raw error
+        if "image" in err.lower() or "vision" in err.lower() or "multimodal" in err.lower() or "400" in err:
+            return "Could not read image: Vision not supported for this model — please paste the error text manually."
+        return f"Could not read image: {err}\nPlease copy-paste the error text in the Analyze Error tab."
 
 
 def get_embedding(text: str, model) -> list:
