@@ -317,7 +317,7 @@ with st.sidebar:
              -webkit-background-clip:text; -webkit-text-fill-color:transparent;'>
             AI Error Detective
         </div>
-        <div style='color:#888; font-size:0.8rem'>Powered by SAP AI Core GPT-5</div>
+        <div style='color:#888; font-size:0.8rem'>Powered by SAP AI Core · Claude Sonnet 4.6</div>
     </div>
     """, unsafe_allow_html=True)
 
