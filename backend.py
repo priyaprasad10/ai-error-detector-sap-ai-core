@@ -15,6 +15,7 @@ _AICORE_BASE          = os.getenv("AICORE_BASE_URL", "").rstrip("/")
 _AICORE_RG            = os.getenv("AICORE_RESOURCE_GROUP", "default")
 _AICORE_DEPLOYMENT_ID = os.getenv("AICORE_DEPLOYMENT_ID", "")
 _AICORE_MODEL         = "gpt-5"
+_VISION_DEPLOYMENT_ID = "db5002b869569b2c"  # GPT-4o — supports image_url vision
 
 # Module-level cache — survives Streamlit reruns within the same worker process
 _TOKEN_CACHE: dict = {}
@@ -546,9 +547,12 @@ def extract_text_from_image(image_file) -> str:
         fmt  = (img.format or "PNG").lower()
         mime = f"image/{fmt}"
 
-        # Anthropic-native image format with OpenAI-compatible fallback
-        response = _aicore_chat(
-            messages=[{
+        # Use GPT-4o deployment for vision — supports image_url format natively
+        token   = _get_token()
+        dep_url = f"{_AICORE_BASE}/v2/inference/deployments/{_VISION_DEPLOYMENT_ID}"
+        body = {
+            "model": "gpt-4o",
+            "messages": [{
                 "role": "user",
                 "content": [
                     {
@@ -566,10 +570,21 @@ def extract_text_from_image(image_file) -> str:
                     }
                 ]
             }],
-            max_completion_tokens=1000,
+            "max_tokens": 1000,
+        }
+        r = _http.post(
+            f"{dep_url}/v1/chat/completions",
+            json=body,
+            headers={
+                "Authorization":     f"Bearer {token}",
+                "AI-Resource-Group": _AICORE_RG,
+                "Content-Type":      "application/json",
+            },
+            timeout=60,
         )
-
-        return response if response else "No text found in image."
+        r.raise_for_status()
+        extracted = r.json()["choices"][0]["message"]["content"].strip()
+        return extracted if extracted else "No text found in image."
 
     except Exception as e:
         err = str(e)
